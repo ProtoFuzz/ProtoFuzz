@@ -7,7 +7,7 @@ class Main(QMainWindow):
     def __init__(self):
         super(Main, self).__init__()
         loadUi("app/ui/main.ui",self)
-
+        self.Error_CAN.setHidden(True)
 
 
 
