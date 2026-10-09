@@ -2,12 +2,12 @@ from PyQt5.QtWidgets import QMainWindow, QApplication
 from PyQt5.uic import loadUi
 import sys
 import os
-import pyshark
+#import pyshark
 from functools import partial
 import can
 import time
 from PyQt5.QtCore import QThread, pyqtSignal
-
+from app.Automotive.CAN.can_fuzzer import CanFuzzer
 
 class CanWorker(QThread):
     new_msg = pyqtSignal(str)
@@ -45,9 +45,12 @@ class Main(QMainWindow):
     def __init__(self):
         super(Main, self).__init__()
         loadUi("app/ui/main.ui", self)
-        self.Error_CAN.setHidden(True)
         self.fuzz_b.clicked.connect(lambda: self.start_capture(self.comboBox_3.currentText()))
         self.Stop_b.clicked.connect(self.stop_capture)
+
+        self.fuzz_b.clicked.connect(lambda: self.start_fuzz(self.comboBox_3.currentText()))
+        self.Stop_b.clicked.connect(self.stop_fuzz)
+
 
     def start_capture(self, interface):
         self.worker = CanWorker(interface)
@@ -60,6 +63,15 @@ class Main(QMainWindow):
             self.worker.wait()
             print("CAN monitoring stopped cleanly.")
 
+
+    def start_fuzz(self, interface):
+        self.fuzzer = CanFuzzer(interface, fields_to_fuzz=["data"])
+        self.fuzzer.start()
+
+    def stop_fuzz(self):
+        if hasattr(self, 'fuzzer') and self.fuzzer.isRunning():
+            self.fuzzer.stop()
+            self.fuzzer.wait()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)

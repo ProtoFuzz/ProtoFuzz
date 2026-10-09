@@ -12,6 +12,11 @@ Protofuzz is a cross-platform python-based GUI fuzzing tool for various protocol
 $pip install -r requirements.txt
 ```
 
+### Testing 
+```sh
+python -m unittest discover -s tests -v
+```
+
 ## License
 
 ProptoFuzz's code, tests and tools are licensed under Apache-2.0 license.
