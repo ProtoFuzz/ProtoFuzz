@@ -81,7 +81,13 @@ class Main(QMainWindow):
             frame_limit=self.frameLimitSpinBox.value(),
         )
         self.fuzzer.error_occurred.connect(self.show_can_error)
+        self.fuzzer.interesting_frame.connect(self.show_interesting_frame)
         self.fuzzer.start()
+
+    def show_interesting_frame(self, message):
+        self.interesting_frames.addItem(message)
+        while self.interesting_frames.count() > 200:
+            self.interesting_frames.takeItem(0)
 
     def show_can_error(self, message):
         self.can_errors.addItem(f"{time.strftime('%H:%M:%S')} ERROR: {message}")

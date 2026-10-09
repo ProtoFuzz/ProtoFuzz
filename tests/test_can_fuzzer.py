@@ -11,6 +11,7 @@ class CanFuzzerTests(unittest.TestCase):
     def run_fuzzer_once(self, fields_to_fuzz, random_bits=None, random_id=None):
         fuzzer = CanFuzzer("test-interface", fields_to_fuzz=fields_to_fuzz)
         bus = Mock()
+        bus.recv.return_value = None
 
         def stop_after_send(_message):
             fuzzer.stop()
@@ -30,7 +31,9 @@ class CanFuzzerTests(unittest.TestCase):
                     fuzzer.run()
 
         bus_factory.assert_called_once_with(
-            channel="test-interface", bustype="socketcan"
+            channel="test-interface",
+            interface="socketcan",
+            receive_own_messages=False,
         )
         bus.send.assert_called_once()
         bus.shutdown.assert_called_once_with()
@@ -71,6 +74,7 @@ class CanFuzzerTests(unittest.TestCase):
     def test_frame_limit_and_send_rate_are_enforced(self):
         fuzzer = CanFuzzer("test-interface", rate_hz=100, frame_limit=3)
         bus = Mock()
+        bus.recv.return_value = None
         clock = [0.0]
 
         def advance_clock(delay):
@@ -103,6 +107,32 @@ class CanFuzzerTests(unittest.TestCase):
             with self.subTest(frame_limit=invalid_limit):
                 with self.assertRaises(ValueError):
                     CanFuzzer("test-interface", frame_limit=invalid_limit)
+
+        for invalid_timeout in (0, -1, float("nan"), float("inf")):
+            with self.subTest(feedback_timeout=invalid_timeout):
+                with self.assertRaises(ValueError):
+                    CanFuzzer("test-interface", feedback_timeout=invalid_timeout)
+
+    def test_emits_transmitted_frame_when_receive_feedback_arrives(self):
+        fuzzer = CanFuzzer("test-interface", frame_limit=1, feedback_timeout=0.01)
+        bus = Mock()
+        response = can.Message(
+            arbitration_id=0x456, data=bytes.fromhex("A1B2"), is_rx=False
+        )
+        bus.recv.side_effect = [response, None]
+        frames = []
+        fuzzer.interesting_frame.connect(frames.append)
+
+        with patch(
+            "app.Automotive.CAN.can_fuzzer.can.interface.Bus", return_value=bus
+        ):
+            with patch(
+                "app.Automotive.CAN.can_fuzzer.random.getrandbits", return_value=0x11
+            ):
+                fuzzer.run()
+
+        self.assertEqual(frames, ["TX 123#1111111111111111 -> RX 456#A1B2"])
+        bus.shutdown.assert_called_once_with()
 
     def test_reports_interface_open_failure(self):
         fuzzer = CanFuzzer("missing-interface")
