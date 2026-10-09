@@ -1,4 +1,4 @@
-from PyQt5.QtCore import QThread
+from PyQt5.QtCore import QThread, pyqtSignal
 import math
 import random
 import threading
@@ -7,6 +7,8 @@ import time
 import can
 
 class CanFuzzer(QThread):
+    error_occurred = pyqtSignal(str)
+
     def __init__(self, interface, fields_to_fuzz=None, rate_hz=100, frame_limit=1000):
         super().__init__()
         if not isinstance(rate_hz, (int, float)) or not math.isfinite(rate_hz) or rate_hz <= 0:
@@ -22,11 +24,12 @@ class CanFuzzer(QThread):
         self._stop_event = threading.Event()
 
     def run(self):
-        bus = can.interface.Bus(channel=self.interface, bustype="socketcan")
-        interval = 1 / self.rate_hz
-        frames_attempted = 0
-        next_send = time.monotonic()
+        bus = None
         try:
+            bus = can.interface.Bus(channel=self.interface, bustype="socketcan")
+            interval = 1 / self.rate_hz
+            frames_attempted = 0
+            next_send = time.monotonic()
             while self.running and frames_attempted < self.frame_limit:
                 delay = next_send - time.monotonic()
                 if delay > 0 and self._stop_event.wait(delay):
@@ -47,13 +50,25 @@ class CanFuzzer(QThread):
                 msg = can.Message(arbitration_id=arb_id, data=data, is_extended_id=False)
                 try:
                     bus.send(msg)
-                except can.CanError:
-                    pass
+                except can.CanError as exc:
+                    self.error_occurred.emit(
+                        f"Send failed on '{self.interface}': {exc}"
+                    )
+                    break
 
                 frames_attempted += 1
                 next_send = time.monotonic() + interval
+        except Exception as exc:
+            self.error_occurred.emit(f"Fuzzing failed on '{self.interface}': {exc}")
         finally:
-            bus.shutdown()
+            self.running = False
+            if bus is not None:
+                try:
+                    bus.shutdown()
+                except Exception as exc:
+                    self.error_occurred.emit(
+                        f"Failed to close CAN interface '{self.interface}': {exc}"
+                    )
 
     def stop(self):
         self.running = False

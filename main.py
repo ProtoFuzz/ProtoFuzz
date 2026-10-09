@@ -11,6 +11,7 @@ from app.Automotive.CAN.can_fuzzer import CanFuzzer
 
 class CanWorker(QThread):
     new_msg = pyqtSignal(str)
+    error_occurred = pyqtSignal(str)
 
     def __init__(self, interface):
         super().__init__()
@@ -31,11 +32,18 @@ class CanWorker(QThread):
                     f"Data: {msg.data.hex()}"
                 )
                 self.new_msg.emit(msg_str)  # send to GUI
-        except can.CanError as e:
-            print(f"CAN bus error: {e}")
+        except Exception as exc:
+            self.error_occurred.emit(
+                f"Capture failed on '{self.interface}': {exc}"
+            )
         finally:
             if 'bus' in locals() and bus:
-                bus.shutdown()
+                try:
+                    bus.shutdown()
+                except Exception as exc:
+                    self.error_occurred.emit(
+                        f"Failed to close capture interface '{self.interface}': {exc}"
+                    )
 
     def stop(self):
         self.running = False
@@ -55,6 +63,7 @@ class Main(QMainWindow):
     def start_capture(self, interface):
         self.worker = CanWorker(interface)
         self.worker.new_msg.connect(self.can_widget.addItem)  # connect signal to widget
+        self.worker.error_occurred.connect(self.show_can_error)
         self.worker.start()
 
     def stop_capture(self):
@@ -71,7 +80,13 @@ class Main(QMainWindow):
             rate_hz=self.fuzzRateSpinBox.value(),
             frame_limit=self.frameLimitSpinBox.value(),
         )
+        self.fuzzer.error_occurred.connect(self.show_can_error)
         self.fuzzer.start()
+
+    def show_can_error(self, message):
+        self.can_errors.addItem(f"{time.strftime('%H:%M:%S')} ERROR: {message}")
+        while self.can_errors.count() > 200:
+            self.can_errors.takeItem(0)
 
     def stop_fuzz(self):
         if hasattr(self, 'fuzzer') and self.fuzzer.isRunning():

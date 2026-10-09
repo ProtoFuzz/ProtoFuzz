@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 import can
 
 from app.Automotive.CAN.can_fuzzer import CanFuzzer
+from main import CanWorker
 
 
 class CanFuzzerTests(unittest.TestCase):
@@ -70,7 +71,6 @@ class CanFuzzerTests(unittest.TestCase):
     def test_frame_limit_and_send_rate_are_enforced(self):
         fuzzer = CanFuzzer("test-interface", rate_hz=100, frame_limit=3)
         bus = Mock()
-        bus.send.side_effect = can.CanError
         clock = [0.0]
 
         def advance_clock(delay):
@@ -103,6 +103,55 @@ class CanFuzzerTests(unittest.TestCase):
             with self.subTest(frame_limit=invalid_limit):
                 with self.assertRaises(ValueError):
                     CanFuzzer("test-interface", frame_limit=invalid_limit)
+
+    def test_reports_interface_open_failure(self):
+        fuzzer = CanFuzzer("missing-interface")
+        errors = []
+        fuzzer.error_occurred.connect(errors.append)
+
+        with patch(
+            "app.Automotive.CAN.can_fuzzer.can.interface.Bus",
+            side_effect=can.CanError("interface unavailable"),
+        ):
+            fuzzer.run()
+
+        self.assertEqual(
+            errors,
+            ["Fuzzing failed on 'missing-interface': interface unavailable"],
+        )
+
+    def test_reports_send_failure_and_closes_bus(self):
+        fuzzer = CanFuzzer("test-interface", frame_limit=3)
+        bus = Mock()
+        bus.send.side_effect = can.CanError("bus went offline")
+        errors = []
+        fuzzer.error_occurred.connect(errors.append)
+
+        with patch(
+            "app.Automotive.CAN.can_fuzzer.can.interface.Bus", return_value=bus
+        ):
+            fuzzer.run()
+
+        self.assertEqual(bus.send.call_count, 1)
+        bus.shutdown.assert_called_once_with()
+        self.assertEqual(errors, ["Send failed on 'test-interface': bus went offline"])
+
+
+class CanWorkerTests(unittest.TestCase):
+    def test_reports_unexpected_interface_failure_without_raising(self):
+        worker = CanWorker("missing-interface")
+        errors = []
+        worker.error_occurred.connect(errors.append)
+
+        with patch(
+            "main.can.interface.Bus", side_effect=RuntimeError("driver unavailable")
+        ):
+            worker.run()
+
+        self.assertEqual(
+            errors,
+            ["Capture failed on 'missing-interface': driver unavailable"],
+        )
 
 
 if __name__ == "__main__":
