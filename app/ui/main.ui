@@ -295,6 +295,70 @@ border-radius: 4px</string>
          <string>*: auto calibrate based on fuzzing value</string>
         </property>
        </widget>
+      <widget class="QLabel" name="fuzzRateLabel">
+       <property name="geometry">
+        <rect>
+         <x>405</x>
+         <y>230</y>
+         <width>120</width>
+         <height>18</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Frames per second</string>
+       </property>
+      </widget>
+      <widget class="QSpinBox" name="fuzzRateSpinBox">
+       <property name="geometry">
+        <rect>
+         <x>405</x>
+         <y>250</y>
+         <width>110</width>
+         <height>24</height>
+        </rect>
+       </property>
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>10000</number>
+       </property>
+       <property name="value">
+        <number>100</number>
+       </property>
+      </widget>
+      <widget class="QLabel" name="frameLimitLabel">
+       <property name="geometry">
+        <rect>
+         <x>535</x>
+         <y>230</y>
+         <width>120</width>
+         <height>18</height>
+        </rect>
+       </property>
+       <property name="text">
+        <string>Frame limit</string>
+       </property>
+      </widget>
+      <widget class="QSpinBox" name="frameLimitSpinBox">
+       <property name="geometry">
+        <rect>
+         <x>535</x>
+         <y>250</y>
+         <width>120</width>
+         <height>24</height>
+        </rect>
+       </property>
+       <property name="minimum">
+        <number>1</number>
+       </property>
+       <property name="maximum">
+        <number>1000000</number>
+       </property>
+       <property name="value">
+        <number>1000</number>
+       </property>
+      </widget>
        <widget class="QComboBox" name="comboBox_2">
         <property name="geometry">
          <rect>

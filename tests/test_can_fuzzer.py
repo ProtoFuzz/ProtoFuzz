@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import Mock, patch
 
+import can
+
 from app.Automotive.CAN.can_fuzzer import CanFuzzer
 
 
@@ -30,6 +32,7 @@ class CanFuzzerTests(unittest.TestCase):
             channel="test-interface", bustype="socketcan"
         )
         bus.send.assert_called_once()
+        bus.shutdown.assert_called_once_with()
         return bus.send.call_args.args[0], getrandbits, randint
 
     def test_default_fuzzes_eight_data_bytes(self):
@@ -63,6 +66,43 @@ class CanFuzzerTests(unittest.TestCase):
         self.assertEqual(message.arbitration_id, 0x789)
         self.assertEqual(getrandbits.call_count, 8)
         randint.assert_called_once_with(0x100, 0x7FF)
+
+    def test_frame_limit_and_send_rate_are_enforced(self):
+        fuzzer = CanFuzzer("test-interface", rate_hz=100, frame_limit=3)
+        bus = Mock()
+        bus.send.side_effect = can.CanError
+        clock = [0.0]
+
+        def advance_clock(delay):
+            clock[0] += delay
+            return False
+
+        with patch(
+            "app.Automotive.CAN.can_fuzzer.can.interface.Bus", return_value=bus
+        ):
+            with patch(
+                "app.Automotive.CAN.can_fuzzer.time.monotonic",
+                side_effect=lambda: clock[0],
+            ):
+                with patch.object(
+                    fuzzer._stop_event, "wait", side_effect=advance_clock
+                ) as wait:
+                    fuzzer.run()
+
+        self.assertEqual(bus.send.call_count, 3)
+        self.assertEqual([call.args[0] for call in wait.call_args_list], [0.01, 0.01])
+        bus.shutdown.assert_called_once_with()
+
+    def test_rejects_invalid_rate_and_frame_limit(self):
+        for invalid_rate in (0, -1, float("nan"), float("inf")):
+            with self.subTest(rate_hz=invalid_rate):
+                with self.assertRaises(ValueError):
+                    CanFuzzer("test-interface", rate_hz=invalid_rate)
+
+        for invalid_limit in (0, -1, 1.5, True):
+            with self.subTest(frame_limit=invalid_limit):
+                with self.assertRaises(ValueError):
+                    CanFuzzer("test-interface", frame_limit=invalid_limit)
 
 
 if __name__ == "__main__":

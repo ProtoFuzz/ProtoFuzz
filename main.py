@@ -65,7 +65,12 @@ class Main(QMainWindow):
 
 
     def start_fuzz(self, interface):
-        self.fuzzer = CanFuzzer(interface, fields_to_fuzz=["data"])
+        self.fuzzer = CanFuzzer(
+            interface,
+            fields_to_fuzz=["data"],
+            rate_hz=self.fuzzRateSpinBox.value(),
+            frame_limit=self.frameLimitSpinBox.value(),
+        )
         self.fuzzer.start()
 
     def stop_fuzz(self):
